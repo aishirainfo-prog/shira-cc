@@ -1,0 +1,1 @@
+{"ts_local":"2025-08-16T17:53:23+0200","ts_utc":"2025-08-16T15:53:23+0000","module":"CORE","stage":"cron","event_type":"telemetry","error_code":null,"source":"termux","source_tier":"local","latency_ms":61,"freshness_s":0,"action_taken":"heartbeat","result":"OK","signature":"3ed96271000eb15c8e521ecc8cd273b874717ded8694944ff00ab028ebc004ac"}

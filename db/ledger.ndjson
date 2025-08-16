@@ -1,0 +1,11 @@
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":null,"ts_utc":null,"type":null,"msg":null,"mode":null,"signature":null}
+{"ts_local":"2025-08-16T15:24:34Z","msg":"Run osservativo REAL-ONLY (no feeds ufficiali collegati)","signature":"SHIRA.TIME.SIGNATURE™:27eea0d188d07e47f77e8d9dbd03ae65"}
+{"ts_local":"2025-08-16T15:27:22Z","msg":"Run osservativo REAL-ONLY (no feeds ufficiali collegati)","signature":"SHIRA.TIME.SIGNATURE™:d6eae30ba6f0c02c07b6978a6291f29f"}
+{"ts_local":"2025-08-16T17:48:39+0200","ts_utc":"2025-08-16T15:48:39+0000","module":"CORE","stage":"cron","event_type":"telemetry","error_code":null,"source":"termux","source_tier":"local","latency_ms":80,"freshness_s":0,"action_taken":"heartbeat","result":"OK","signature":"c280384de8283807f458e9e3d257f2c20fccaae0249d03538156e163989e5c38"}
+{"ts_local":"2025-08-16T17:53:23+0200","ts_utc":"2025-08-16T15:53:23+0000","module":"CORE","stage":"cron","event_type":"telemetry","error_code":null,"source":"termux","source_tier":"local","latency_ms":61,"freshness_s":0,"action_taken":"heartbeat","result":"OK","signature":"3ed96271000eb15c8e521ecc8cd273b874717ded8694944ff00ab028ebc004ac"}
