@@ -1,0 +1,5 @@
+export const runtime = "nodejs";
+export async function GET() {
+  // Qui in futuro metteremo i sync veri (fixtures/results).
+  return Response.json({ ok: true, runAt: new Date().toISOString() });
+}
