@@ -1,4 +1,4 @@
-"use client";
+'"use client";
 import { useState } from "react";
 type Json = Record<string, any>;
 
@@ -117,23 +117,3 @@ export default function ShiraCommandCenter() {
     </main>
   );
 }
-// dentro app/page.tsx, aggiungi una card:
-<div className="rounded-lg border p-4 space-y-3">
-  <h2 className="text-xl font-semibold">Dati sport (demo)</h2>
-  <div className="flex gap-2">
-    <button className="border px-3 py-2 rounded" onClick={async () => {
-      const r = await fetch('/api/sync/fixtures')
-      alert(await r.text())
-    }}>Scarica partite di oggi</button>
-
-    <button className="border px-3 py-2 rounded" onClick={async () => {
-      const r = await fetch('/api/sync/results')
-      alert(await r.text())
-    }}>Aggiorna risultati</button>
-
-    <button className="border px-3 py-2 rounded" onClick={async () => {
-      const r = await fetch('/api/schedine/genera', { method: 'POST' })
-      alert(await r.text())
-    }}>Genera schedina (demo)</button>
-  </div>
-</div>
