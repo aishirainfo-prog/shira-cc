@@ -2,7 +2,7 @@
   "name": "shira-command-center",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+  "scripts": {"@supabase/supabase-js": "^2.46.1", 
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
