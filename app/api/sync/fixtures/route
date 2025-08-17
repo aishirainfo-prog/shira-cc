@@ -1,0 +1,43 @@
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+export const runtime = 'nodejs';
+
+function today() { return new Date().toISOString().slice(0,10); }
+
+async function sha256(str: string) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+export async function GET() {
+  const token = process.env.FOOTBALL_DATA_API_KEY;
+  if (!token) return NextResponse.json({ error: 'FOOTBALL_DATA_API_KEY mancante' }, { status: 400 });
+
+  const from = today(), to = today();
+  const res = await fetch(`https://api.football-data.org/v4/matches?dateFrom=${from}&dateTo=${to}`, {
+    headers: { 'X-Auth-Token': token }
+  });
+  const json = await res.json();
+
+  const rows = (json.matches ?? []).map((m:any)=>({
+    id: m.id,
+    sport: 'football',
+    league: m.competition?.name ?? null,
+    home: m.homeTeam?.name ?? null,
+    away: m.awayTeam?.name ?? null,
+    start_ts: m.utcDate ? new Date(m.utcDate).toISOString() : null,
+    status: m.status ?? null
+  }));
+
+  const { error } = await supabase.from('fixtures').upsert(rows, { onConflict: 'id' });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await supabase.from('sources_log').insert({
+    source: 'football-data.org',
+    url: `v4/matches?dateFrom=${from}&dateTo=${to}`,
+    payload: json,
+    payload_hash: await sha256(JSON.stringify(json))
+  });
+
+  return NextResponse.json({ ok: true, inserted: rows.length });
+} 
