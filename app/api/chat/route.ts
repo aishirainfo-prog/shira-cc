@@ -1,19 +1,30 @@
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
-import { env } from "@/lib/env";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const { prompt } = await req.json();
-    if (!env.OPENAI_API_KEY) return NextResponse.json({ error: "OPENAI_API_KEY mancante" }, { status: 500 });
-    const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-    const out = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt || "Ciao Shira!" }],
+    const { input } = await req.json();
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return Response.json({ error: "OPENAI_API_KEY mancante" });
+    }
+
+    // Chiamata minimale (modello economico). Se non hai credito -> "insufficient_quota".
+    const r = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        input: input || "Ciao dal backend!"
+      })
     });
-    return NextResponse.json({ text: out.choices?.[0]?.message?.content ?? "" });
+
+    const data = await r.json();
+    return Response.json(data);
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "chat error" }, { status: 500 });
+    return Response.json({ error: "chat_error", details: String(e) });
   }
 }
