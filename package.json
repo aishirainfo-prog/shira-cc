@@ -1,17 +1,21 @@
 {
   "name": "shira-command-center",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "scripts": 
+  "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
-  "dependencies": "@supabase/supabase-js": "^2.46.1", 
+  "dependencies": {
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@supabase/supabase-js": "^2.45.0"
+    "@supabase/supabase-js": "^2.45.4",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=18.17"
   }
 }
