@@ -1,64 +1,72 @@
+// /app/api/sync/fixtures/route.ts
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import crypto from 'crypto'
 
-function todayRangeUTC() {
-  const d = new Date()
-  const y = d.getUTCFullYear()
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(d.getUTCDate()).padStart(2, '0')
-  const from = `${y}-${m}-${day}`
-  const to = `${y}-${m}-${day}`
-  return { from, to }
+export const runtime = 'nodejs' // ci serve crypto
+
+function day(d = new Date()) {
+  return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
 
-export const runtime = 'nodejs' // per usare crypto
-
 export async function GET() {
-  try {
-    const { from, to } = todayRangeUTC()
-    const token = process.env.FOOTBALL_DATA_TOKEN
-    if (!token) return NextResponse.json({ error: 'FOOTBALL_DATA_TOKEN mancante' }, { status: 400 })
+  const token = process.env.FOOTBALL_DATA_API_KEY
+  if (!token) return NextResponse.json({ error: 'FOOTBALL_DATA_API_KEY mancante' }, { status: 400 })
 
-    const url = `https://api.football-data.org/v4/matches?dateFrom=${from}&dateTo=${to}`
-    const res = await fetch(url, { headers: { 'X-Auth-Token': token } })
-    const json = await res.json()
+  const dateFrom = day()
+  const dt = new Date()
+  dt.setDate(dt.getDate() + 1)
+  const dateTo = day(dt)
 
-    // log della fonte (prova reale)
-    const payload = JSON.stringify(json)
-    const hash = crypto.createHash('sha256').update(payload).digest('hex')
-    await supabase.from('sources_log').insert({
-      source: 'football-data.org',
-      url,
-      payload: json,
-      payload_hash: hash,
-    })
+  // API ufficiale football-data.org
+  const url = `https://api.football-data.org/v4/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
+  const res = await fetch(url, { headers: { 'X-Auth-Token': token } })
+  const json = await res.json()
 
-    if (!json.matches) {
-      return NextResponse.json({ ok: true, saved: 0, note: 'Nessun match oggi (fonte)' })
-    }
-
-    // salva/aggiorna fixtures
-    const rows = json.matches.map((m: any) => ({
-      id: m.id,                     // id della fonte
-      sport: 'football',
-      league: m.competition?.name || null,
-      home: m.homeTeam?.name || null,
-      away: m.awayTeam?.name || null,
-      start_ts: m.utcDate ? new Date(m.utcDate).toISOString() : null,
-      status: m.status || null,
-    }))
-
-    // upsert a blocchi per evitare limite
-    const chunk = 500
-    for (let i = 0; i < rows.length; i += chunk) {
-      const part = rows.slice(i, i + chunk)
-      const { error } = await supabase.from('fixtures').upsert(part, { onConflict: 'id' })
-      if (error) throw error
-    }
-
-    return NextResponse.json({ ok: true, saved: rows.length, from, to })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || String(e) }, { status: 500 })
+  if (!res.ok) {
+    return NextResponse.json({ error: json?.message || 'Errore fonte' }, { status: res.status })
   }
+
+  const matches = json?.matches ?? []
+  let upFixtures = 0, upResults = 0
+
+  for (const m of matches) {
+    const id = m.id as number
+    const league = m.competition?.name ?? null
+    const home = m.homeTeam?.shortName || m.homeTeam?.name
+    const away = m.awayTeam?.shortName || m.awayTeam?.name
+    const start_ts = m.utcDate ? new Date(m.utcDate) : null
+    const status = m.status ?? null
+
+    // fixtures
+    const { error: e1 } = await supabaseAdmin
+      .from('fixtures')
+      .upsert([{ id, sport: 'football', league, home, away, start_ts, status }], { onConflict: 'id' })
+    if (!e1) upFixtures++
+
+    // results
+    const ft = m.score?.fullTime || {}
+    const final = status === 'FINISHED'
+    const { error: e2 } = await supabaseAdmin
+      .from('results')
+      .upsert([{ fixture_id: id, home_score: ft.home ?? null, away_score: ft.away ?? null, final }], { onConflict: 'fixture_id' })
+    if (!e2) upResults++
+  }
+
+  // Log di provenienza (verificabile)
+  const payload_hash = crypto.createHash('sha256').update(JSON.stringify(matches)).digest('hex')
+  await supabaseAdmin.from('sources_log').insert([{
+    source: 'football-data.org',
+    url,
+    payload: matches,
+    payload_hash
+  }])
+
+  return NextResponse.json({
+    source: 'football-data.org',
+    dateFrom, dateTo,
+    fixtures_upserted: upFixtures,
+    results_upserted: upResults,
+    count: matches.length
+  })
 }
