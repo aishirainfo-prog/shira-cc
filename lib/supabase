@@ -4,3 +4,5 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.SUPABASE_URL!
 const supabaseKey = process.env.SUPABASE_ANON_KEY! // ok per demo; poi useremo service role per i cron
 export const supabase = createClient(supabaseUrl, supabaseKey)
+// /lib/supabase.ts
+export { supabaseAdmin as supabase } from './supabaseAdmin'
