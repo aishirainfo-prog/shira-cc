@@ -1,2 +1,8 @@
-import { NextResponse } from "next/server"; import { sendAlert } from "@/lib/mailer";
-export async function POST(req: Request) { const { subject, text } = await req.json(); await sendAlert(subject || "SHIRA Alert", text || "No text"); return NextResponse.json({ ok:true }); }
+export const runtime = "nodejs";
+
+export async function POST() {
+  return Response.json({
+    ok: true,
+    note: "Mailer disabilitato (stub)."
+  });
+}
