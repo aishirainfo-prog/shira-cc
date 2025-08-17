@@ -1,43 +1,64 @@
-import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-export const runtime = 'nodejs';
+import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import crypto from 'crypto'
 
-function today() { return new Date().toISOString().slice(0,10); }
-
-async function sha256(str: string) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+function todayRangeUTC() {
+  const d = new Date()
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const from = `${y}-${m}-${day}`
+  const to = `${y}-${m}-${day}`
+  return { from, to }
 }
 
+export const runtime = 'nodejs' // per usare crypto
+
 export async function GET() {
-  const token = process.env.FOOTBALL_DATA_API_KEY;
-  if (!token) return NextResponse.json({ error: 'FOOTBALL_DATA_API_KEY mancante' }, { status: 400 });
+  try {
+    const { from, to } = todayRangeUTC()
+    const token = process.env.FOOTBALL_DATA_TOKEN
+    if (!token) return NextResponse.json({ error: 'FOOTBALL_DATA_TOKEN mancante' }, { status: 400 })
 
-  const from = today(), to = today();
-  const res = await fetch(`https://api.football-data.org/v4/matches?dateFrom=${from}&dateTo=${to}`, {
-    headers: { 'X-Auth-Token': token }
-  });
-  const json = await res.json();
+    const url = `https://api.football-data.org/v4/matches?dateFrom=${from}&dateTo=${to}`
+    const res = await fetch(url, { headers: { 'X-Auth-Token': token } })
+    const json = await res.json()
 
-  const rows = (json.matches ?? []).map((m:any)=>({
-    id: m.id,
-    sport: 'football',
-    league: m.competition?.name ?? null,
-    home: m.homeTeam?.name ?? null,
-    away: m.awayTeam?.name ?? null,
-    start_ts: m.utcDate ? new Date(m.utcDate).toISOString() : null,
-    status: m.status ?? null
-  }));
+    // log della fonte (prova reale)
+    const payload = JSON.stringify(json)
+    const hash = crypto.createHash('sha256').update(payload).digest('hex')
+    await supabase.from('sources_log').insert({
+      source: 'football-data.org',
+      url,
+      payload: json,
+      payload_hash: hash,
+    })
 
-  const { error } = await supabase.from('fixtures').upsert(rows, { onConflict: 'id' });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!json.matches) {
+      return NextResponse.json({ ok: true, saved: 0, note: 'Nessun match oggi (fonte)' })
+    }
 
-  await supabase.from('sources_log').insert({
-    source: 'football-data.org',
-    url: `v4/matches?dateFrom=${from}&dateTo=${to}`,
-    payload: json,
-    payload_hash: await sha256(JSON.stringify(json))
-  });
+    // salva/aggiorna fixtures
+    const rows = json.matches.map((m: any) => ({
+      id: m.id,                     // id della fonte
+      sport: 'football',
+      league: m.competition?.name || null,
+      home: m.homeTeam?.name || null,
+      away: m.awayTeam?.name || null,
+      start_ts: m.utcDate ? new Date(m.utcDate).toISOString() : null,
+      status: m.status || null,
+    }))
 
-  return NextResponse.json({ ok: true, inserted: rows.length });
-} 
+    // upsert a blocchi per evitare limite
+    const chunk = 500
+    for (let i = 0; i < rows.length; i += chunk) {
+      const part = rows.slice(i, i + chunk)
+      const { error } = await supabase.from('fixtures').upsert(part, { onConflict: 'id' })
+      if (error) throw error
+    }
+
+    return NextResponse.json({ ok: true, saved: rows.length, from, to })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || String(e) }, { status: 500 })
+  }
+}
