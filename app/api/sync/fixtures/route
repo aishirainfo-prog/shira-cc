@@ -1,95 +1,50 @@
-// /app/api/sync/fixtures/route.ts
-import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
-import crypto from 'crypto'
+import { NextResponse } from 'next/server';
+import { supabase } from '@/lib/supabase';
+import { fetchTodayMatches } from '@/lib/providers/footballData';
+import crypto from 'crypto';
+export const runtime = 'nodejs';
 
-export const runtime = 'nodejs'
+export async function GET() {
+  try {
+    const { url: sourceUrl, data } = await fetchTodayMatches();
+    const matches = data.matches || [];
 
-function day(d = new Date()) {
-  return d.toISOString().slice(0, 10) // YYYY-MM-DD
-}
+    // Log di provenienza con hash del payload
+    const payloadHash = crypto
+      .createHash('sha256')
+      .update(JSON.stringify(data))
+      .digest('hex');
 
-export async function GET(req: Request) {
-  // Protezione cron (Vercel invia Authorization: Bearer <CRON_SECRET>)
-  const auth = req.headers.get('authorization') || ''
-  const urlObj = new URL(req.url)
-  const qpAuth = urlObj.searchParams.get('auth') // per test manuali
-  const ok =
-    !process.env.CRON_SECRET ||
-    auth === `Bearer ${process.env.CRON_SECRET}` ||
-    qpAuth === process.env.CRON_SECRET
-  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    await supabase.from('sources_log').insert({
+      source: 'football-data',
+      url: sourceUrl,
+      payload: data,
+      payload_hash: payloadHash
+    });
 
-  const token =
-    process.env.FOOTBALL_DATA_API_KEY || process.env.FOOTBALL_DATA_TOKEN
-  if (!token) {
-    return NextResponse.json(
-      { error: 'FOOTBALL_DATA_API_KEY mancante' },
-      { status: 400 }
-    )
-  }
+    // Upsert in fixtures
+    const rows = matches.map((m: any) => ({
+      id: m.id,
+      sport: 'football',
+      league: m.competition?.name ?? null,
+      home: m.homeTeam?.name ?? null,
+      away: m.awayTeam?.name ?? null,
+      start_ts: m.utcDate ?? null,
+      status: m.status ?? null
+    }));
 
-  const dateFrom = day(new Date())
-  const dateTo = day(new Date(Date.now() + 24 * 60 * 60 * 1000))
-
-  const url = `https://api.football-data.org/v4/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
-  const res = await fetch(url, { headers: { 'X-Auth-Token': token } })
-  const json = await res.json()
-
-  if (!res.ok) {
-    return NextResponse.json(
-      { error: json?.message || 'Errore fonte' },
-      { status: res.status }
-    )
-  }
-
-  const matches = Array.isArray(json.matches) ? json.matches : []
-  let upFixtures = 0
-  let upResults = 0
-
-  for (const m of matches) {
-    const id = Number(m.id)
-    const league = m.competition?.name ?? null
-    const home = m.homeTeam?.shortName ?? m.homeTeam?.name ?? null
-    const away = m.awayTeam?.shortName ?? m.awayTeam?.name ?? null
-    const start_ts = m.utcDate ? new Date(m.utcDate) : null
-    const status = m.status ?? null
-
-    // fixtures
-    const { error: e1 } = await supabase
+    const { error } = await supabase
       .from('fixtures')
-      .upsert({ id, sport: 'football', league, home, away, start_ts, status }, { onConflict: 'id' })
-    if (!e1) upFixtures++
+      .upsert(rows, { onConflict: 'id' });
 
-    // results (se disponibile)
-    const ft = m.score?.fullTime || {}
-    const final = status === 'FINISHED'
-    const { error: e2 } = await supabase
-      .from('results')
-      .upsert(
-        { fixture_id: id, home_score: ft.home ?? null, away_score: ft.away ?? null, final },
-        { onConflict: 'fixture_id' }
-      )
-    if (!e2) upResults++
+    if (error) throw error;
+
+    return NextResponse.json({
+      ok: true,
+      count: rows.length,
+      source: { provider: 'football-data', url: sourceUrl, hash: payloadHash }
+    });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
-
-  // Log di provenienza
-  const payload_hash = crypto
-    .createHash('sha256')
-    .update(JSON.stringify(matches))
-    .digest('hex')
-  await supabase.from('sources_log').insert({
-    source: 'football-data.org',
-    url,
-    payload: matches,
-    payload_hash,
-  })
-
-  return NextResponse.json({
-    ok: true,
-    source: 'football-data.org',
-    fetched: matches.length,
-    upFixtures,
-    upResults,
-  })
 }
